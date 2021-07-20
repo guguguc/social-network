@@ -3,8 +3,8 @@ import random
 import time
 
 import requests as req
-from tqdm import tqdm
 
+from tqdm import tqdm
 from config import headers, cookies, info_url, follower_url
 
 
@@ -66,10 +66,18 @@ class User:
         return User(uid, name, **data)
 
 
+# 只关注与根用户互相关注的好友圈
+def accept(people: User, depth):
+    return depth or people.follow_me
+
+
 class Network:
-    def __init__(self, relations: list[RelationShip], users: list[User]):
+    logger = None
+
+    def __init__(self, relations: list[RelationShip], users: list[User], name=None):
         self.relations = relations
         self.users = users
+        self.name = name
 
     def add_user(self, user: User):
         self.users.append(user)
@@ -101,6 +109,32 @@ class Network:
         self.users.extend(net.users)
         self.users = list(set(self.users))
 
+    def to_json(self):
+        return json.dumps(self, default=lambda o: o.__dict__, indent=4, ensure_ascii=False)
+
+    def from_json(self, fp):
+        return json.load(self, fp)
+
+    def dump(self, filename):
+        with open(filename, 'w') as fp:
+            fp.write(self.to_json())
+
+    @staticmethod
+    def construct(uid: int, max_depth=1, depth=0, callback=None):
+        if depth >= max_depth:
+            return
+        users = list(filter(lambda x: accept(x, depth), get_followers(uid)))
+        relations = [RelationShip(uid, user.uid) for user in users]
+        net = Network(relations, users)
+        container = net.users[:] if depth else tqdm(net.users[:])
+        for user in container:
+            out_net = Network.construct(user.uid, max_depth, depth + 1)
+            if out_net:
+                net.merge(out_net)
+            if callback:
+                callback(net)
+        return net
+
     @property
     def size(self):
         return len(self.users)
@@ -117,12 +151,6 @@ class Network:
 
     def __repr__(self):
         return str(self)
-
-    def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__, indent=4, ensure_ascii=False)
-
-    def from_json(self, fp):
-        return json.load(self, fp)
 
 
 class Spider:
@@ -147,7 +175,6 @@ def get_page_followers(url, page_id=None):
     :return:
     """
     # print(f"page: {page_id}")
-    time.sleep(random.random() * 4)
     resp = req.get(url,
                    headers=headers,
                    cookies=cookies,
@@ -156,14 +183,15 @@ def get_page_followers(url, page_id=None):
                    },
                    proxies=None).json()
 
-    assert resp['data'], f'response of {url}: {resp}'
+    assert resp.get('data'), f'response of {url}: {resp}'
     return resp['data']
 
 
-def get_followers(url_tmplate: str, uid: int) -> list[User]:
+def get_followers(uid: int) -> list[User]:
+    time.sleep(random.random() * 7)
     # print(f"{uid}'s followers:")
     users = []
-    url = url_tmplate.replace('{id}', str(uid))
+    url = follower_url.replace('{id}', str(uid))
     page = 1
     while True:
         data = get_page_followers(url, page)
@@ -177,31 +205,13 @@ def get_followers(url_tmplate: str, uid: int) -> list[User]:
     return list(users)
 
 
-def get_social_network(uid, depth=1, cur=0) -> Network:
-    if cur >= depth:
-        return
-
-    # 只关注与根用户互相关注的好友圈
-    def accept(people: User):
-        return cur or people.follow_me
-
-    users = list(filter(accept, get_followers(follower_url, uid)))
-    relations = [RelationShip(uid, user.uid) for user in users]
-    net = Network(relations, users)
-
-    for user in tqdm(net.users[:]):
-        out_net = get_social_network(user.uid, depth, cur + 1)
-        if out_net:
-            print(f'old net size: {net.size}')
-            net.merge(out_net)
-            print(f'new net size: {net.size}')
-    return net
+def get_logger():
+    pass
 
 
 if __name__ == "__main__":
     # 由于api限制, 该方法获取的followers不超过200个
-    net = get_social_network(6126303533, 2)
+    uid = 6126303533
+    net = Network.construct(uid, max_depth=2)
     print(f'net contains {net.size} people, {net.edges} relations')
-    file = '6126303533-2.txt'
-    with open(file, 'w') as fp:
-        fp.write(net.to_json())
+    net.dump(f'{uid}.txt')
