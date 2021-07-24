@@ -1,21 +1,52 @@
+import random
 import tkinter as tk
 import queue
-from tkinter import ttk
 import threading
+from tkinter import ttk
+from pprint import pprint
 from main import Network
 
 
 # 主线程为ui线程
 # 线程a构建社交网络
-
 class ThreadedTask(threading.Thread):
     def __init__(self, q: queue.Queue):
         super().__init__()
         self.queue = q
 
     def run(self):
-        net = Network.construct(uid=self.queue.get(), max_depth=2)
+        net = Network.construct(uid=self.queue.get(), max_depth=1)
         self.queue.put(net)
+
+
+class Figure:
+    def __init__(self, name):
+        self.name = name
+        self.canvas = self.id = self.label = None
+        self.x = self.y = None
+
+    def attash(self, canvas: tk.Canvas, x1, y1, x2, y2):
+        if not self.canvas:
+            self.canvas = canvas
+        self.label = tk.Label(canvas, text=self.name, bg='#0f0')
+        self.label.bind('<B1-Motion>', self.move)
+        center_x = (x1 + x2) / 2
+        center_y = (y1 + y2) / 2
+        self.label.place(x=center_x, y=center_y)
+        self.x = center_x
+        self.y = center_y
+
+    def detash(self):
+        label = self.label
+        self.label = self.canvas = None
+        label.destroy()
+
+    def move(self, event):
+        x = self.x + event.x
+        y = self.y + event.y
+        self.label.place(x=x, y=y)
+        self.x = x
+        self.y = y
 
 
 class Gui(tk.Frame):
@@ -23,7 +54,8 @@ class Gui(tk.Frame):
         super().__init__(master)
         self.main_pane = tk.PanedWindow(bg='black', sashwidth=1)
         self.main_pane.pack(fill=tk.BOTH, expand=1)
-        self.left_pane = tk.PanedWindow(self.main_pane, orient=tk.VERTICAL, bg='black', sashwidth=1)
+        self.left_pane = tk.PanedWindow(self.main_pane,
+                                        orient=tk.VERTICAL, bg='black', sashwidth=1)
         self.main_pane.add(self.left_pane)
         self.input_label = None
         self.input_field = None
@@ -36,6 +68,7 @@ class Gui(tk.Frame):
         self.prog_bar = None
         self.queue = None
         self.net = None
+        self.figures = []
         self.add_user_input()
         self.add_progress_track()
         self.add_user_list()
@@ -83,6 +116,28 @@ class Gui(tk.Frame):
         self.graph = tk.Canvas(self.master)
         self.main_pane.add(self.graph)
 
+    def update_graph(self):
+        assert self.net
+
+        num = self.net.size
+        cs = self.graph.winfo_width()
+        rs = self.graph.winfo_height()
+        diameter = 30
+        position = [(random.gauss(mu=rs / 2, sigma=diameter * 5),
+                     random.gauss(cs / 2, diameter * 3)) for _ in
+                    range(num)]
+        for pos, user in zip(position, self.net.users):
+            x1, y1 = pos
+            x2, y2 = x1 + diameter, y1 + diameter
+            figure = Figure(user.name)
+            figure.attash(self.graph, x1, y1, x2, y2)
+            self.figures.append(figure)
+
+    def clear_graph(self):
+        for item in self.figures[:]:
+            item.detash()
+            self.figures.remove(item)
+
     def add_progress(self):
         if self.prog_bar is not None:
             return
@@ -118,7 +173,9 @@ class Gui(tk.Frame):
         self.process_queue()
 
     def btn_show_clicked(self):
-        pass
+        if self.graph:
+            self.clear_graph()
+        self.update_graph()
 
 
 root = tk.Tk()
