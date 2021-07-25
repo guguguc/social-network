@@ -3,12 +3,9 @@ import tkinter as tk
 import queue
 import threading
 from tkinter import ttk
-from pprint import pprint
-from main import Network
+from main import Network, User
 
 
-# 主线程为ui线程
-# 线程a构建社交网络
 class ThreadedTask(threading.Thread):
     def __init__(self, q: queue.Queue):
         super().__init__()
@@ -20,15 +17,26 @@ class ThreadedTask(threading.Thread):
 
 
 class Figure:
-    def __init__(self, name):
-        self.name = name
-        self.canvas = self.id = self.label = None
+    def __init__(self, user: User):
+        """
+        :param user:与figure相对应的社交网络中的User
+        """
+        self.user = user
+        self.canvas = self.label = None
         self.x = self.y = None
+        self.lines = []
 
     def attash(self, canvas: tk.Canvas, x1, y1, x2, y2):
+        """
+        :param canvas: 显示figure的canvas
+        :param x1: 显示figure的label矩形左上角x坐标
+        :param y1: 显示figure的label矩形左上角y坐标
+        :param x2: 显示figure的label矩形右下角x坐标
+        :param y2: 显示figure的label矩形右下角y坐标
+        """
         if not self.canvas:
             self.canvas = canvas
-        self.label = tk.Label(canvas, text=self.name, bg='#0f0')
+        self.label = tk.Label(canvas, text=self.user.name, bg='#0f0')
         self.label.bind('<B1-Motion>', self.move)
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
@@ -37,16 +45,42 @@ class Figure:
         self.y = center_y
 
     def detash(self):
+        self.delete_lines()
         label = self.label
         self.label = self.canvas = None
         label.destroy()
 
     def move(self, event):
-        x = self.x + event.x
-        y = self.y + event.y
-        self.label.place(x=x, y=y)
-        self.x = x
-        self.y = y
+        # print(f'moving, x:{event.x}, y:{event.y}')
+        nx = self.x + event.x
+        ny = self.y + event.y
+        self.label.place(x=nx, y=ny)
+        # 移动节点间连接线到新坐标
+        ox, oy = self.x, self.y
+        for line in self.lines:
+            pts = self.canvas.coords(line)
+            # 移动边的起点
+            if (ox, oy) == tuple(pts[:2]):
+                x1, y1 = nx, ny
+                x2, y2 = pts[2:]
+            else:
+                x1, y1 = pts[:2]
+                x2, y2 = nx, ny
+            self.canvas.coords(line, x1, y1, x2, y2)
+        self.x = nx
+        self.y = ny
+
+    def draw_line(self, other):
+        line = self.canvas.create_line(self.x, self.y, other.x, other.y)
+        self.lines.append(line)
+        other.lines.append(line)
+
+    def delete_lines(self):
+        # To do
+        # 判断是否能删除
+        lines = self.lines
+        for line in lines:
+            self.canvas.delete(line)
 
 
 class Gui(tk.Frame):
@@ -68,7 +102,8 @@ class Gui(tk.Frame):
         self.prog_bar = None
         self.queue = None
         self.net = None
-        self.figures = []
+        self.figures = dict()
+        self.target = None
         self.add_user_input()
         self.add_progress_track()
         self.add_user_list()
@@ -109,16 +144,21 @@ class Gui(tk.Frame):
         sz = self.user_list.size()
         if sz:
             self.user_list.delete(0, sz)
-        for i, user in enumerate(self.net.users):
-            self.user_list.insert(i, [user.uid, user.name])
+        for i, (uid, user) in enumerate(self.net.users.items()):
+            self.user_list.insert(i, [uid, user.name])
 
     def add_graph(self):
         self.graph = tk.Canvas(self.master)
         self.main_pane.add(self.graph)
 
+    def add_lines(self):
+        for relation in self.net.relations:
+            figure_from = self.figures.get(relation.subject)
+            figure_to = self.figures.get(relation.follower)
+            figure_from.draw_line(figure_to)
+
     def update_graph(self):
         assert self.net
-
         num = self.net.size
         cs = self.graph.winfo_width()
         rs = self.graph.winfo_height()
@@ -126,17 +166,18 @@ class Gui(tk.Frame):
         position = [(random.gauss(mu=rs / 2, sigma=diameter * 5),
                      random.gauss(cs / 2, diameter * 3)) for _ in
                     range(num)]
-        for pos, user in zip(position, self.net.users):
+        for pos, (uid, user) in zip(position, self.net.users.items()):
             x1, y1 = pos
             x2, y2 = x1 + diameter, y1 + diameter
-            figure = Figure(user.name)
+            figure = Figure(user)
             figure.attash(self.graph, x1, y1, x2, y2)
-            self.figures.append(figure)
+            self.figures[uid] = figure
+        self.add_lines()
 
     def clear_graph(self):
-        for item in self.figures[:]:
-            item.detash()
-            self.figures.remove(item)
+        for uid, figure in self.figures.items():
+            figure.detash()
+            self.figures.pop(uid)
 
     def add_progress(self):
         if self.prog_bar is not None:
@@ -167,7 +208,8 @@ class Gui(tk.Frame):
         self.add_progress()
         self.prog_bar.start()
         self.queue = queue.Queue()
-        self.queue.put(self.input_field.get())
+        self.target = self.input_field.get()
+        self.queue.put(self.target)
         self.btn_ok['state'] = tk.DISABLED
         ThreadedTask(self.queue).start()
         self.process_queue()
