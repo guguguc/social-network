@@ -7,13 +7,17 @@ from main import Network, User
 
 
 class ThreadedTask(threading.Thread):
-    def __init__(self, q: queue.Queue):
-        super().__init__()
+    def __init__(self, q: queue.Queue,
+                 target, *args, **kwargs):
+        super().__init__(target=target, args=args, kwargs=kwargs)
         self.queue = q
 
     def run(self):
-        net = Network.construct(uid=self.queue.get(), max_depth=1)
-        self.queue.put(net)
+        try:
+            ret = self._target(*self._args, **self._kwargs)
+            self.queue.put(ret)
+        finally:
+            del self._target, self._args, self._kwargs
 
 
 class Figure:
@@ -89,18 +93,20 @@ class Figure:
 class Gui(tk.Frame):
     def __init__(self, master: tk.Tk):
         super().__init__(master)
-        self.main_pane = tk.PanedWindow(bg='black', sashwidth=1)
-        self.main_pane.pack(fill=tk.BOTH, expand=1)
-        self.left_pane = tk.PanedWindow(self.main_pane,
-                                        orient=tk.VERTICAL, bg='black', sashwidth=1)
-        self.main_pane.add(self.left_pane)
-        self.input_label = None
-        self.input_field = None
-        self.netsize_var = tk.StringVar(self, value='0')
-        self.netedge_var = tk.StringVar(self, value='0')
-        self.user_list = None
+        self.pane_main = tk.PanedWindow(bg='black', sashwidth=1)
+        self.pane_main.pack(fill=tk.BOTH, expand=1)
+        self.pane_left = tk.PanedWindow(self.pane_main, orient=tk.VERTICAL,
+                                        bg='black', sashwidth=1)
+        self.pane_main.add(self.pane_left)
+        self.label_id = None
+        self.entry_id = None
+        self.label_depth = None
+        self.spinbox_depth = None
         self.btn_ok = None
         self.btn_show = None
+        self.var_netsize = tk.StringVar(self, value='0')
+        self.var_netedge = tk.StringVar(self, value='0')
+        self.user_list = None
         self.graph = None
         self.prog_bar = None
         self.queue = None
@@ -115,32 +121,76 @@ class Gui(tk.Frame):
 
     def add_user_input(self):
         input_frame = tk.Frame()
-        self.input_label = tk.Label(input_frame, text='user id')
-        self.input_field = tk.Entry(input_frame)
+        self.label_id = tk.Label(input_frame, text='User id')
+        self.entry_id = tk.Entry(input_frame)
+        self.spinbox_depth = tk.Spinbox(input_frame, from_=1, to=10)
+        self.label_depth = tk.Label(input_frame, text='Depth')
         self.btn_ok = tk.Button(input_frame, text='collect', command=self.btn_ok_clicked)
-        self.input_label.pack(side=tk.LEFT)
-        self.input_field.pack(fill=tk.X, expand=True, side=tk.LEFT)
-        self.btn_ok.pack(side=tk.RIGHT)
-        self.left_pane.add(input_frame)
+        self.label_id.grid(row=0, column=0)
+        self.entry_id.grid(row=0, column=1)
+        self.label_depth.grid(row=1, column=0)
+        self.spinbox_depth.grid(row=1, column=1)
+        self.btn_ok.grid(row=0, column=2)
+        self.pane_left.add(input_frame)
 
     def add_progress_track(self):
         container = tk.Frame()
         label_netsize = tk.Label(container, text='net size:')
         label_relations = tk.Label(container, text='net edges:')
-        msg_netsize = tk.Message(container, textvariable=self.netsize_var)
-        msg_netedge = tk.Message(container, textvariable=self.netedge_var)
+        msg_netsize = tk.Message(container, textvariable=self.var_netsize)
+        msg_netedge = tk.Message(container, textvariable=self.var_netedge)
         self.btn_show = tk.Button(container, text='show', command=self.btn_show_clicked)
         label_netsize.grid(row=0, column=0, sticky=tk.W)
         label_relations.grid(row=0, column=2)
         msg_netsize.grid(row=0, column=1)
         msg_netedge.grid(row=0, column=3, padx=(0, 30))
         self.btn_show.grid(row=0, column=4, sticky=tk.E)
-        self.left_pane.add(container)
+        self.pane_left.add(container)
 
     def add_user_list(self):
         self.user_list = tk.Listbox()
         self.user_list.bind('<Double-Button-1>', self.copy_user_id)
-        self.left_pane.add(self.user_list)
+        self.pane_left.add(self.user_list)
+
+    def add_graph(self):
+        self.graph = tk.Canvas(self.master)
+        self.pane_main.add(self.graph)
+
+    def copy_user_id(self, event):
+        self.master.clipboard_clear()
+        assert self.user_list
+        selected = self.user_list.get(tk.ANCHOR)[0]
+        self.master.clipboard_append(selected)
+
+    def btn_ok_clicked(self):
+        self.add_progress()
+        self.prog_bar.start()
+        self.queue = queue.Queue()
+        self.target = self.entry_id.get()
+        self.btn_ok['state'] = tk.DISABLED
+        ThreadedTask(self.queue, Network.construct,
+                     uid=self.target,
+                     max_depth=int(self.spinbox_depth.get())).start()
+        self.process_queue()
+
+    def add_progress(self):
+        if self.prog_bar is not None:
+            return
+        self.prog_bar = ttk.Progressbar(orient='vertical', mode='indeterminate')
+        self.pane_left.add(self.prog_bar)
+
+    def process_queue(self):
+        try:
+            self.net = self.queue.get(0)
+            self.var_netsize.set(f'{self.net.size}')
+            self.var_netedge.set(f'{self.net.edges}')
+            self.update_user_list()
+            self.prog_bar.stop()
+            self.pane_left.remove(self.prog_bar)
+            self.prog_bar = None
+            self.btn_ok['state'] = tk.NORMAL
+        except queue.Empty:
+            self.master.after(100, self.process_queue)
 
     def update_user_list(self):
         assert self.net and self.user_list
@@ -150,15 +200,12 @@ class Gui(tk.Frame):
         for i, (uid, user) in enumerate(self.net.users.items()):
             self.user_list.insert(i, [uid, user.name])
 
-    def add_graph(self):
-        self.graph = tk.Canvas(self.master)
-        self.main_pane.add(self.graph)
-
-    def add_lines(self):
-        for relation in self.net.relations:
-            figure_from = self.figures.get(relation.subject)
-            figure_to = self.figures.get(relation.follower)
-            figure_from.draw_line(figure_to)
+    def btn_show_clicked(self):
+        if self.graph:
+            self.clear_graph()
+            print('clear graph')
+        self.update_graph()
+        self.figures[self.target].change_color('#00b4d8')
 
     def update_graph(self):
         assert self.net
@@ -183,47 +230,11 @@ class Gui(tk.Frame):
             figure.detash()
             self.figures.pop(uid)
 
-    def add_progress(self):
-        if self.prog_bar is not None:
-            return
-        self.prog_bar = ttk.Progressbar(orient='vertical', mode='indeterminate')
-        self.left_pane.add(self.prog_bar)
-
-    def copy_user_id(self, event):
-        self.master.clipboard_clear()
-        assert self.user_list
-        selected = self.user_list.get(tk.ANCHOR)[0]
-        self.master.clipboard_append(selected)
-
-    def process_queue(self):
-        try:
-            self.net = self.queue.get(0)
-            self.netsize_var.set(f'{self.net.size}')
-            self.netedge_var.set(f'{self.net.edges}')
-            self.update_user_list()
-            self.prog_bar.stop()
-            self.left_pane.remove(self.prog_bar)
-            self.prog_bar = None
-            self.btn_ok['state'] = tk.NORMAL
-        except queue.Empty:
-            self.master.after(100, self.process_queue)
-
-    def btn_ok_clicked(self):
-        self.add_progress()
-        self.prog_bar.start()
-        self.queue = queue.Queue()
-        self.target = self.input_field.get()
-        self.queue.put(self.target)
-        self.btn_ok['state'] = tk.DISABLED
-        ThreadedTask(self.queue).start()
-        self.process_queue()
-
-    def btn_show_clicked(self):
-        if self.graph:
-            self.clear_graph()
-            print('clear graph')
-        self.update_graph()
-        self.figures[self.target].change_color('#00b4d8')
+    def add_lines(self):
+        for relation in self.net.relations:
+            figure_from = self.figures.get(relation.subject)
+            figure_to = self.figures.get(relation.follower)
+            figure_from.draw_line(figure_to)
 
 
 root = tk.Tk()
