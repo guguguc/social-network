@@ -36,7 +36,7 @@ class Figure:
         """
         if not self.canvas:
             self.canvas = canvas
-        self.label = tk.Label(canvas, text=self.user.name, bg='#0f0')
+        self.label = tk.Label(canvas, text=self.user.name, bg='#b7e4c7')
         self.label.bind('<B1-Motion>', self.move)
         center_x = (x1 + x2) / 2
         center_y = (y1 + y2) / 2
@@ -81,6 +81,9 @@ class Figure:
         lines = self.lines
         for line in lines:
             self.canvas.delete(line)
+
+    def change_color(self, color):
+        self.label.config(background=color)
 
 
 class Gui(tk.Frame):
@@ -175,7 +178,8 @@ class Gui(tk.Frame):
         self.add_lines()
 
     def clear_graph(self):
-        for uid, figure in self.figures.items():
+        figures = self.figures.copy()
+        for uid, figure in figures.items():
             figure.detash()
             self.figures.pop(uid)
 
@@ -217,7 +221,9 @@ class Gui(tk.Frame):
     def btn_show_clicked(self):
         if self.graph:
             self.clear_graph()
+            print('clear graph')
         self.update_graph()
+        self.figures[self.target].change_color('#00b4d8')
 
 
 root = tk.Tk()
