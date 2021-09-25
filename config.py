@@ -3,17 +3,17 @@ headers = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
 cookies = {
-    "T_WM": "23010681771",
+    "T_WM": "48006617374",
     "SCF":
         "Apy097ZCCps4raq8Vak6EclcDTnVbRHotrL1kjvg0HhijCiQ5tx1fjNRHoOOepPEF-LGgptwgd60d949_PPNL50.",
     "SUB":
-        "_2A25N6V0LDeRhGeBP6VQS8C3JyD-IHXVvEmNDrDV6PUJbktANLVankW1NRWejPTCpa09SvJ7HnWZJTrmZdo8PXaum",
+        "_2A25N_5P1DeRhGeBP6VQS8C3JyD-IHXVvAz29rDV6PUJbkdAKLU_ikW1NRWejPY-DN--BzH5MBviwbw_E66Bu54SF",
     "SUBP":
-        "0033WrSXqPxfM725Ws9jqgMF55529P9D9W5v1ED0B0LiqpSlMv3MxhXd5NHD95QceKzce050SKe0Ws4DqcjG9NHrUgUfq7tt",
+        "0033WrSXqPxfM725Ws9jqgMF55529P9D9W5v1ED0B0LiqpSlMv3MxhXd5JpX5KMhUgL.Foqpeoq0ehefe0e2dJLoI7UrUgUf9NHo",
     "MLOGIN": "1",
     "M_WEIBOCN_PARAMS":
-        "oid%3D4655386890338872%26luicode%3D10000011%26lfid%3D231093_-_selffollowed%26fid%3D231093_-_selffollowed%26uicode%3D10000011",
-    "XSRF-TOKEN": "be39c4",
+        "oid%3D4662543623130610%26luicode%3D10000011%26lfid%3D231093_-_selffollowed%26fid%3D231093_-_selffollowed%26uicode%3D10000011",
+    "XSRF-TOKEN": "410d4e",
     "WEIBOCN_FROM": "1110006030"
 }
 proxies = {

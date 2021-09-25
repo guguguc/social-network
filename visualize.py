@@ -166,7 +166,7 @@ class Gui(tk.Frame):
         self.add_progress()
         self.prog_bar.start()
         self.queue = queue.Queue()
-        self.target = self.entry_id.get()
+        self.target = int(self.entry_id.get())
         self.btn_ok['state'] = tk.DISABLED
         ThreadedTask(self.queue, Network.construct,
                      uid=self.target,
@@ -216,6 +216,7 @@ class Gui(tk.Frame):
         position = [(random.gauss(mu=rs / 2, sigma=diameter * 5),
                      random.gauss(cs / 2, diameter * 3)) for _ in
                     range(num)]
+        # 根据User构造图中的Figure对象
         for pos, (uid, user) in zip(position, self.net.users.items()):
             x1, y1 = pos
             x2, y2 = x1 + diameter, y1 + diameter
@@ -231,6 +232,8 @@ class Gui(tk.Frame):
             self.figures.pop(uid)
 
     def add_lines(self):
+        from pprint import pprint
+        pprint(self.figures)
         for relation in self.net.relations:
             figure_from = self.figures.get(relation.subject)
             figure_to = self.figures.get(relation.follower)

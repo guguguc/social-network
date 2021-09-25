@@ -17,9 +17,9 @@ class NetworkEncoder(json.JSONEncoder):
 
 
 class RelationShip:
-    def __init__(self, subject, follower):
-        self.subject = subject
-        self.follower = follower
+    def __init__(self, subject: int, follower: int):
+        self.subject = int(subject)
+        self.follower = int(follower)
 
     def __str__(self):
         return f'({self.subject} -> {self.follower})'
@@ -41,7 +41,9 @@ class RelationShip:
 
 
 class User:
-    def __init__(self, uid, name, **kargs):
+    def __init__(self, uid: int, name: str, **kargs):
+        if isinstance(uid, str):
+            uid = int(uid)
         self.uid = uid
         self.name = name
         for key, val in kargs.items():
@@ -79,8 +81,8 @@ class User:
 
 # 只关注与根用户互相关注的好友圈
 def accept(people: User, depth):
-    return depth or people.follow_me
-    # return True
+    # return depth or people.follow_me
+    return True
 
 
 class Network:
@@ -154,21 +156,20 @@ class Network:
             fp.write(self.to_json())
 
     @staticmethod
-    def construct(uid: int, max_depth=1, depth=0, callback=None):
+    def construct(uid: int, max_depth=1, depth=0):
         if depth >= max_depth:
             return
         # 获取当前uid所关注的用户列表
         users = list(filter(lambda x: accept(x, depth), get_followers(uid)))
         relations = [RelationShip(uid, user.uid) for user in users]
         net = Network(relations, users)
-        container = net.users.keys() if depth else tqdm(net.users.keys())
+        followers = net.users.copy().keys()
+        container = followers if depth else tqdm(followers)
         # 递归获取关注用户所关注的用户
         for id in container:
             out_net = Network.construct(id, max_depth, depth + 1)
             if out_net:
                 net.merge(out_net)
-            if callback:
-                callback(net)
         # 将当前uid对应的用户加入社交网络
         current = User.construct_user(uid)
         net.add_user(current)
@@ -227,7 +228,7 @@ def get_page_followers(url, page_id=None):
 
 
 def get_followers(uid: int) -> list[User]:
-    time.sleep(random.random() * 7)
+    time.sleep(random.random() * 10)
     # print(f"{uid}'s followers:")
     users = []
     url = follower_url.replace('{id}', str(uid))
